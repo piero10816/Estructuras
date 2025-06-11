@@ -2,153 +2,213 @@
 #include <string>
 using namespace std;
 
-// Estructura del proceso
 struct Proceso {
+    int id;
     string nombre;
-    int usoCPU;      // En porcentaje
-    int memoria;     // En MB
+    int prioridad;
+    int usoCPU;
+    Proceso* sig;
 };
 
-// Nodo de la lista enlazada
-struct Nodo {
-    Proceso proceso;
-    Nodo* siguiente;
+struct NodoMemoria {
+    int idProceso;
+    int memoriaAsignada;
+    NodoMemoria* siguiente;
 };
 
-Nodo* cabeza = nullptr;
-const int MEMORIA_TOTAL = 1024; // Memoria total en MB
+// Lista enlazada de procesos
+Proceso* cabeza = NULL;
 
-// Funciones
-void agregarProceso() {
-    Proceso nuevoProceso;
-    cout << "Ingrese nombre del proceso: ";
-    cin >> nuevoProceso.nombre;
-    cout << "Ingrese uso de memoria (MB): ";
-    cin >> nuevoProceso.memoria;
-    cout << "Ingrese uso de CPU (%): ";
-    cin >> nuevoProceso.usoCPU;
+// Cola manual para planificacion
+struct NodoCola {
+    Proceso* proceso;
+    NodoCola* sig;
+};
 
-    Nodo* nuevoNodo = new Nodo;
-    nuevoNodo->proceso = nuevoProceso;
-    nuevoNodo->siguiente = nullptr;
+NodoCola* frente = NULL;
+NodoCola* fin = NULL;
 
-    if (cabeza == nullptr) {
-        cabeza = nuevoNodo;
-    } else {
-        Nodo* actual = cabeza;
-        while (actual->siguiente != nullptr) {
-            actual = actual->siguiente;
-        }
-        actual->siguiente = nuevoNodo;
-    }
+// Pila manual para gestion de memoria
+NodoMemoria* cima = NULL;
 
-    cout << "Proceso agregado correctamente.\n";
+// ---------------- Menus ----------------
+
+void mostrarMenuPrincipal() {
+    cout << "\n===== SISTEMA DE GESTION DE PROCESOS =====" << endl;
+    cout << "1. Gestion de Procesos" << endl;
+    cout << "2. Planificacion de CPU" << endl;
+    cout << "3. Gestion de Memoria" << endl;
+    cout << "4. Salir" << endl;
+    cout << "Seleccione una opcion: ";
 }
 
-void verProcesos() {
-    if (cabeza == nullptr) {
-        cout << "No hay procesos registrados.\n";
+void mostrarMenuProcesos() {
+    cout << "\n----- GESTION DE PROCESOS -----" << endl;
+    cout << "1. Agregar nuevo proceso" << endl;
+    cout << "2. Eliminar proceso" << endl;
+    cout << "3. Buscar proceso por ID" << endl;
+    cout << "4. Buscar proceso por nombre" << endl;
+    cout << "5. Modificar prioridad" << endl;
+    cout << "6. Mostrar todos los procesos" << endl;
+    cout << "7. Volver al menu principal" << endl;
+    cout << "Seleccione una opcion: ";
+}
+
+void mostrarMenuPlanificador() {
+    cout << "\n----- PLANIFICADOR DE CPU -----" << endl;
+    cout << "1. Encolar proceso" << endl;
+    cout << "2. Ejecutar proceso (desencolar)" << endl;
+    cout << "3. Mostrar cola de planificacion" << endl;
+    cout << "4. Volver al menu principal" << endl;
+    cout << "Seleccione una opcion: ";
+}
+
+void mostrarMenuMemoria() {
+    cout << "\n----- GESTION DE MEMORIA -----" << endl;
+    cout << "1. Asignar memoria a proceso" << endl;
+    cout << "2. Liberar memoria" << endl;
+    cout << "3. Mostrar estado de memoria" << endl;
+    cout << "4. Volver al menu principal" << endl;
+    cout << "Seleccione una opcion: ";
+}
+
+// ---------------- Funciones procesos ----------------
+
+void agregarProceso() {
+    Proceso* nuevo = new Proceso;
+    cout << "ID: "; cin >> nuevo->id;
+    cout << "Nombre: "; cin >> nuevo->nombre;
+    cout << "Prioridad: "; cin >> nuevo->prioridad;
+    cout << "Uso de CPU (%): "; cin >> nuevo->usoCPU;
+    nuevo->sig = cabeza;
+    cabeza = nuevo;
+    cout << "Proceso agregado." << endl;
+}
+
+void mostrarProcesos() {
+    Proceso* aux = cabeza;
+    while (aux) {
+        cout << "ID: " << aux->id << " Nombre: " << aux->nombre
+             << " Prioridad: " << aux->prioridad << " CPU: " << aux->usoCPU << "%" << endl;
+        aux = aux->sig;
+    }
+}
+
+// ---------------- Cola planificacion ----------------
+
+void encolar(Proceso* p) {
+    NodoCola* nuevo = new NodoCola;
+    nuevo->proceso = p;
+    nuevo->sig = NULL;
+    if (!frente) frente = fin = nuevo;
+    else {
+        fin->sig = nuevo;
+        fin = nuevo;
+    }
+    cout << "Proceso encolado." << endl;
+}
+
+void desencolar() {
+    if (!frente) {
+        cout << "Cola vacia." << endl;
         return;
     }
+    NodoCola* temp = frente;
+    cout << "Ejecutando proceso ID: " << temp->proceso->id << endl;
+    frente = frente->sig;
+    delete temp;
+    if (!frente) fin = NULL;
+}
 
-    Nodo* actual = cabeza;
-    cout << "\nLista de procesos:\n";
-    while (actual != nullptr) {
-        cout << "Nombre: " << actual->proceso.nombre << " | ";
-        cout << "Memoria: " << actual->proceso.memoria << " MB | ";
-        cout << "CPU: " << actual->proceso.usoCPU << "%\n";
-        actual = actual->siguiente;
+void mostrarCola() {
+    NodoCola* aux = frente;
+    while (aux) {
+        cout << "ID: " << aux->proceso->id << " Nombre: " << aux->proceso->nombre << endl;
+        aux = aux->sig;
     }
 }
 
-void ordenarPorCPU() {
-    if (!cabeza || !cabeza->siguiente) return;
+// ---------------- Pila memoria ----------------
 
-    bool cambiado;
-    do {
-        cambiado = false;
-        Nodo* actual = cabeza;
-        while (actual->siguiente != nullptr) {
-            if (actual->proceso.usoCPU < actual->siguiente->proceso.usoCPU) {
-                swap(actual->proceso, actual->siguiente->proceso);
-                cambiado = true;
-            }
-            actual = actual->siguiente;
-        }
-    } while (cambiado);
-
-    cout << "Procesos ordenados por uso de CPU.\n";
+void asignarMemoria() {
+    NodoMemoria* nuevo = new NodoMemoria;
+    cout << "ID del proceso: "; cin >> nuevo->idProceso;
+    cout << "Memoria a asignar (MB): "; cin >> nuevo->memoriaAsignada;
+    nuevo->siguiente = cima;
+    cima = nuevo;
+    cout << "Memoria asignada." << endl;
 }
 
-void verUsoTotalCPU() {
-    int totalCPU = 0;
-    Nodo* actual = cabeza;
-    while (actual != nullptr) {
-        totalCPU += actual->proceso.usoCPU;
-        actual = actual->siguiente;
+void liberarMemoria() {
+    if (!cima) {
+        cout << "Pila de memoria vacia." << endl;
+        return;
     }
-    if (totalCPU > 100) totalCPU = 100;
-    cout << "Uso total de CPU: " << totalCPU << "%\n";
+    NodoMemoria* temp = cima;
+    cima = cima->siguiente;
+    cout << "Memoria liberada del proceso ID: " << temp->idProceso << endl;
+    delete temp;
 }
 
-void verMemoria() {
-    int memoriaOcupada = 0;
-    Nodo* actual = cabeza;
-    while (actual != nullptr) {
-        memoriaOcupada += actual->proceso.memoria;
-        actual = actual->siguiente;
+void mostrarMemoria() {
+    NodoMemoria* aux = cima;
+    while (aux) {
+        cout << "ID Proceso: " << aux->idProceso << " Memoria: " << aux->memoriaAsignada << "MB" << endl;
+        aux = aux->siguiente;
     }
-    int memoriaDisponible = MEMORIA_TOTAL - memoriaOcupada;
-    cout << "Memoria ocupada: " << memoriaOcupada << " MB\n";
-    cout << "Memoria disponible: " << memoriaDisponible << " MB\n";
 }
 
-// Menus
-void gestorCPU() {
-    int opcion;
-    do {
-        cout << "\n-- Gestor de CPU --\n";
-        cout << "1. Ordenar procesos por uso de CPU\n";
-        cout << "2. Ver uso total de CPU\n";
-        cout << "3. Volver al menu principal\n";
-        cout << "Seleccione una opcion: ";
-        cin >> opcion;
-
-        switch(opcion) {
-            case 1: ordenarPorCPU(); break;
-            case 2: verUsoTotalCPU(); break;
-        }
-    } while (opcion != 3);
-}
-
-void gestorMemoria() {
-    cout << "\n-- Gestor de Memoria --\n";
-    verMemoria();
-}
+// ---------------- Main ----------------
 
 int main() {
-    int opcion;
+    int op1, op2;
     do {
-        cout << "\n====== SISTEMA DE GESTION ======\n";
-        cout << "1. Agregar procesos\n";
-        cout << "2. Ver procesos\n";
-        cout << "3. Gestor de CPU\n";
-        cout << "4. Gestor de Memoria\n";
-        cout << "5. Gestor de Almacenamiento\n";
-        cout << "6. Salir\n";
-        cout << "Seleccione una opcion: ";
-        cin >> opcion;
-
-        switch(opcion) {
-            case 1: agregarProceso(); break;
-            case 2: verProcesos(); break;
-            case 3: gestorCPU(); break;
-            case 4: gestorMemoria(); break;
-            case 5: cout << "[Gestor de almacenamiento no implementado]\n"; break;
-            case 6: cout << "Saliendo del sistema...\n"; break;
-            default: cout << "Opcion no valida. Intente nuevamente.\n";
+        mostrarMenuPrincipal();
+        cin >> op1;
+        switch (op1) {
+            case 1:
+                do {
+                    mostrarMenuProcesos();
+                    cin >> op2;
+                    switch (op2) {
+                        case 1: agregarProceso(); break;
+                        case 6: mostrarProcesos(); break;
+                    }
+                } while (op2 != 7);
+                break;
+            case 2:
+                do {
+                    mostrarMenuPlanificador();
+                    cin >> op2;
+                    switch (op2) {
+                        case 1:
+                            int id;
+                            cout << "ID del proceso a encolar: ";
+                            cin >> id;
+                            {
+                                Proceso* aux = cabeza;
+                                while (aux && aux->id != id) aux = aux->sig;
+                                if (aux) encolar(aux);
+                                else cout << "No encontrado.\n";
+                            }
+                            break;
+                        case 2: desencolar(); break;
+                        case 3: mostrarCola(); break;
+                    }
+                } while (op2 != 4);
+                break;
+            case 3:
+                do {
+                    mostrarMenuMemoria();
+                    cin >> op2;
+                    switch (op2) {
+                        case 1: asignarMemoria(); break;
+                        case 2: liberarMemoria(); break;
+                        case 3: mostrarMemoria(); break;
+                    }
+                } while (op2 != 4);
+                break;
         }
-    } while(opcion != 6);
-
+    } while (op1 != 4);
     return 0;
 }
